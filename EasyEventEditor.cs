@@ -767,8 +767,7 @@ public class EasyEventEditorDrawer : PropertyDrawer
                         break;
                     }
                 }
-
-                //if (componentID > 1)
+                
                 objectTypeName += string.Format("({0})", componentID);
             }
         }
@@ -820,7 +819,17 @@ public class EasyEventEditorDrawer : PropertyDrawer
         else
             argTypes = GetTypeForListenerMode(listenerMode);
 
-        MethodInfo[] foundMethods = objectType.GetMethods(BindingFlags.Public | (cachedSettings.showPrivateMembers ? BindingFlags.NonPublic : BindingFlags.Default) | BindingFlags.Instance);
+        List<MethodInfo> foundMethods = new List<MethodInfo>();
+
+        // For some reason BindingFlags.FlattenHierarchy does not seem to work, so we manually traverse the base types instead
+        while (objectType != null)
+        {
+            MethodInfo[] foundMethodsOnType = objectType.GetMethods(BindingFlags.Public | (cachedSettings.showPrivateMembers ? BindingFlags.NonPublic : BindingFlags.Default) | BindingFlags.Instance);
+
+            foundMethods.AddRange(foundMethodsOnType);
+
+            objectType = objectType.BaseType; 
+        }
 
         foreach (MethodInfo methodInfo in foundMethods)
         {
@@ -828,7 +837,7 @@ public class EasyEventEditorDrawer : PropertyDrawer
             if (methodInfo.ReturnType != typeof(void))
                 continue;
 
-            ParameterInfo[] methodParams = methodInfo.GetParameters()/*.Where(method => !method.ParameterType.IsSpecialName).ToArray()*/;
+            ParameterInfo[] methodParams = methodInfo.GetParameters();
             if (methodParams.Length != argTypes.Length)
                 continue;
 
