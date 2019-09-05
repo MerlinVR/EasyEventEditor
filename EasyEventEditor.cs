@@ -33,8 +33,6 @@
  *  4. Gives an Invoke button to execute the event in editor for debugging and testing
  */
 
-#if UNITY_EDITOR
-
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -417,6 +415,7 @@ public class EasyEventEditorSettings : EditorWindow
 }
 
 // Drawer that gets patched in over Unity's default event drawer
+[CustomPropertyDrawer(typeof(UnityEventBase), true)]
 public class EasyEventEditorDrawer : PropertyDrawer
 {
     class DrawerState
@@ -1251,5 +1250,3 @@ public class EasyEventEditorDrawer : PropertyDrawer
 }
 
 } // namespace Merlin
-
-#endif
