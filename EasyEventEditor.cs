@@ -1120,9 +1120,19 @@ public class EasyEventEditorDrawer : PropertyDrawer
         EditorGUI.BeginChangeCheck();
 
         GUI.Box(gameObjectRect, GUIContent.none);
+        Object oldTarget = serializedTarget.objectReferenceValue;
         EditorGUI.PropertyField(gameObjectRect, serializedTarget, GUIContent.none);
-        if (EditorGUI.EndChangeCheck())
-            serializedMethod.stringValue = null;
+        if (EditorGUI.EndChangeCheck()) {
+            if (oldTarget != null && serializedTarget.objectReferenceValue != null && oldTarget is Component && serializedTarget.objectReferenceValue is GameObject) {
+                Object testResult = ((GameObject)serializedTarget.objectReferenceValue).GetComponent(oldTarget.GetType());
+                if (testResult != null) {
+                    serializedTarget.objectReferenceValue = testResult;
+                }
+            }
+            if (serializedTarget.objectReferenceValue == null || oldTarget == null || !serializedTarget.objectReferenceValue.GetType().IsAssignableFrom(oldTarget.GetType())) {
+                serializedMethod.stringValue = null;
+            }
+        }
 
         PersistentListenerMode mode = (PersistentListenerMode)serializedMode.enumValueIndex;
 
