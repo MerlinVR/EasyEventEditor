@@ -25,12 +25,13 @@
 /**
  * Script to make working with objects that have Unity persistent events easier. 
  * 
- * Allows four things that the default Unity event editor does not:
+ * Allows five things that the default Unity event editor does not:
  * 
  *  1. Allows reordering of events. If you want to reorder events in the default Unity editor, you need to delete events and recreate them in the desired order
  *  2. Gives easy access to private methods and properties on the target object. Usually you'd otherwise need to edit the event in debug view to add private references.
  *  3. Gives access to multiple components of the same type on the same object
  *  4. Gives an Invoke button to execute the event in editor for debugging and testing
+ *  5. Adds hotkeys to event operations
  */
 
 #if UNITY_EDITOR
@@ -47,6 +48,7 @@ using System.Linq;
 
 namespace Merlin
 {
+
 [InitializeOnLoad]
 public class EasyEventEditorHandler
 {
@@ -55,18 +57,20 @@ public class EasyEventEditorHandler
     private const string eeeShowInvokeFieldKey = "EEE.showInvokeField";
     private const string eeeDisplayArgumentTypeKey = "EEE.displayArgumentType";
     private const string eeeGroupSameComponentTypeKey = "EEE.groupSameComponentType";
+    private const string eeeUseHotkeys = "EEE.usehotkeys";
 
     private static bool patchApplied = false;
     private static FieldInfo internalDrawerTypeMap = null;
     private static System.Type attributeUtilityType = null;
 
-    public struct EEESettings
+    public class EEESettings
     {
         public bool overrideEventDrawer;
         public bool showPrivateMembers;
         public bool showInvokeField;
         public bool displayArgumentType;
         public bool groupSameComponentType;
+        public bool useHotkeys;
     }
 
     // https://stackoverflow.com/questions/12898282/type-gettype-not-working 
@@ -221,8 +225,11 @@ public class EasyEventEditorHandler
                 {
                     foreach (Editor activeEditor in activeEditorTracker.activeEditors)
                     {
-                        propertyHandleCacheField.SetValue(activeEditor, System.Activator.CreateInstance(propertyHandlerCacheType));
-                        activeEditor.Repaint(); // Force repaint to get updated drawing of property
+                        if (activeEditor != null)
+                        {
+                            propertyHandleCacheField.SetValue(activeEditor, System.Activator.CreateInstance(propertyHandlerCacheType));
+                            activeEditor.Repaint(); // Force repaint to get updated drawing of property
+                        }
                     }
                 }
             }
@@ -342,10 +349,11 @@ public class EasyEventEditorHandler
         EEESettings settings = new EEESettings
         {
             overrideEventDrawer = EditorPrefs.GetBool(eeeOverrideEventDrawerKey, true),
-            showPrivateMembers = EditorPrefs.GetBool(eeeShowPrivateMembersKey, false),
-            showInvokeField = EditorPrefs.GetBool(eeeShowInvokeFieldKey, false),
-            displayArgumentType = EditorPrefs.GetBool(eeeDisplayArgumentTypeKey, false),
-            groupSameComponentType = EditorPrefs.GetBool(eeeGroupSameComponentTypeKey, true),
+            showPrivateMembers = EditorPrefs.GetBool(eeeShowPrivateMembersKey, true),
+            showInvokeField = EditorPrefs.GetBool(eeeShowInvokeFieldKey, true),
+            displayArgumentType = EditorPrefs.GetBool(eeeDisplayArgumentTypeKey, true),
+            groupSameComponentType = EditorPrefs.GetBool(eeeGroupSameComponentTypeKey, false),
+            useHotkeys = EditorPrefs.GetBool(eeeUseHotkeys, true),
         };
 
         return settings;
@@ -358,18 +366,74 @@ public class EasyEventEditorHandler
         EditorPrefs.SetBool(eeeShowInvokeFieldKey, settings.showInvokeField);
         EditorPrefs.SetBool(eeeDisplayArgumentTypeKey, settings.displayArgumentType);
         EditorPrefs.SetBool(eeeGroupSameComponentTypeKey, settings.groupSameComponentType);
+        EditorPrefs.SetBool(eeeUseHotkeys, settings.useHotkeys);
     }
 }
 
+internal class SettingsGUIContent
+{
+    private static GUIContent enableToggleGuiContent = new GUIContent("Enable Easy Event Editor", "Replaces the default Unity event editing context with EEE");
+    private static GUIContent enablePrivateMembersGuiContent = new GUIContent("Show private properties and methods", "Exposes private/internal/obsolete properties and methods to the function list on events");
+    private static GUIContent showInvokeFieldGuiContent = new GUIContent("Show invoke button on events", "Gives you a button on events that can be clicked to execute all functions on a given event");
+    private static GUIContent displayArgumentTypeContent = new GUIContent("Display argument type on function name", "Shows the argument that a function takes on the function header");
+    private static GUIContent groupSameComponentTypeContent = new GUIContent("Do not group components of the same type", "If you have multiple components of the same type on one object, show all components. Unity hides duplicate components by default.");
+    private static GUIContent useHotkeys = new GUIContent("Use hotkeys", "Adds common Unity hotkeys to event editor that operate on the currently selected event. The commands are Add (CTRL+A), Copy, Paste, Cut, Delete, and Duplicate");
+
+    public static void DrawSettingsButtons(EasyEventEditorHandler.EEESettings settings)
+    {
+        EditorGUI.indentLevel += 1;
+
+        settings.overrideEventDrawer = EditorGUILayout.ToggleLeft(enableToggleGuiContent, settings.overrideEventDrawer);
+
+        EditorGUI.BeginDisabledGroup(!settings.overrideEventDrawer);
+
+        settings.showPrivateMembers = EditorGUILayout.ToggleLeft(enablePrivateMembersGuiContent, settings.showPrivateMembers);
+        settings.showInvokeField = EditorGUILayout.ToggleLeft(showInvokeFieldGuiContent, settings.showInvokeField);
+        settings.displayArgumentType = EditorGUILayout.ToggleLeft(displayArgumentTypeContent, settings.displayArgumentType);
+        settings.groupSameComponentType = !EditorGUILayout.ToggleLeft(groupSameComponentTypeContent, !settings.groupSameComponentType);
+        settings.useHotkeys = EditorGUILayout.ToggleLeft(useHotkeys, settings.useHotkeys);
+
+        EditorGUI.EndDisabledGroup();
+        EditorGUI.indentLevel -= 1;
+    }
+}
+
+#if UNITY_2018_3_OR_NEWER
+// Use the new settings provider class instead so we don't need to add extra stuff to the Edit menu
+// Using the IMGUI method
+static class EasyEventEditorSettingsProvider
+{
+    [SettingsProvider]
+    public static SettingsProvider CreateSettingsProvider()
+    {
+        var provider = new SettingsProvider("Preferences/Easy Event Editor", SettingsScope.User)
+        {
+            label = "Easy Event Editor",
+
+            guiHandler = (searchContext) =>
+            {
+                EasyEventEditorHandler.EEESettings settings = EasyEventEditorHandler.GetEditorSettings();
+
+                EditorGUI.BeginChangeCheck();
+                SettingsGUIContent.DrawSettingsButtons(settings);
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    EasyEventEditorHandler.SetEditorSettings(settings);
+                    EasyEventEditorHandler.ApplyEventPropertyDrawerPatch(true);
+                }
+
+            },
+
+            keywords = new HashSet<string>(new[] { "Easy", "Event", "Editor", "Delegate", "VRChat", "EEE" })
+        };
+
+        return provider;
+    }
+}
+#else
 public class EasyEventEditorSettings : EditorWindow
 {
-    // Too lazy to put the proper layout in the actual gui draw
-    private readonly GUIContent enableToggleGuiContent = new GUIContent("    Enable Easy Event Editor", "Replaces the default Unity event editing context with EEE");
-    private readonly GUIContent enablePrivateMembersGuiContent = new GUIContent("    Show private properties and methods", "Exposes private/internal/obsolete properties and methods to the function list on events");
-    private readonly GUIContent showInvokeFieldGuiContent = new GUIContent("    Show invoke button on events", "Gives you a button on events that can be clicked to execute all functions on a given event");
-    private readonly GUIContent displayArgumentTypeContent = new GUIContent("    Display argument type on function name", "Shows the argument that a function takes on the function header");
-    private readonly GUIContent groupSameComponentTypeContent = new GUIContent("    Do not group components of the same type", "If you have multiple components of the same type on one object, show all components. Unity hides duplicate components by default.");
-
     [MenuItem("Edit/Easy Event Editor Settings")]
     static void Init()
     {
@@ -387,34 +451,18 @@ public class EasyEventEditorSettings : EditorWindow
         EditorGUILayout.Space();
 
         EasyEventEditorHandler.EEESettings settings = EasyEventEditorHandler.GetEditorSettings();
-        bool settingsDirty = false;
-
 
         EditorGUI.BeginChangeCheck();
+        SettingsGUIContent.DrawSettingsButtons(settings);
 
-        settings.overrideEventDrawer = GUILayout.Toggle(settings.overrideEventDrawer, enableToggleGuiContent);
         if (EditorGUI.EndChangeCheck())
-            settingsDirty = true;
-
-        EditorGUI.BeginDisabledGroup(!settings.overrideEventDrawer);
-
-        EditorGUI.BeginChangeCheck();
-        settings.showPrivateMembers = GUILayout.Toggle(settings.showPrivateMembers, enablePrivateMembersGuiContent);
-        settings.showInvokeField = GUILayout.Toggle(settings.showInvokeField, showInvokeFieldGuiContent);
-        settings.displayArgumentType = GUILayout.Toggle(settings.displayArgumentType, displayArgumentTypeContent);
-        settings.groupSameComponentType = !GUILayout.Toggle(!settings.groupSameComponentType, groupSameComponentTypeContent);
-        if (EditorGUI.EndChangeCheck())
-            settingsDirty = true;
-
-        EditorGUI.EndDisabledGroup();
-
-        if (settingsDirty)
         {
             EasyEventEditorHandler.SetEditorSettings(settings);
             EasyEventEditorHandler.ApplyEventPropertyDrawerPatch(true);
         }
     }
 }
+#endif
 
 // Drawer that gets patched in over Unity's default event drawer
 public class EasyEventEditorDrawer : PropertyDrawer
@@ -491,20 +539,229 @@ public class EasyEventEditorDrawer : PropertyDrawer
         listenerArray = state.reorderableList.serializedProperty;
 
         // Setup dummy event
+#if UNITY_2018_4_OR_NEWER
+        Object targetObject = currentProperty.serializedObject.targetObject;
+        if (targetObject == null)
+        {
+            dummyEvent = new UnityEvent();
+        }
+        else
+        {
+            string propertyPath = currentProperty.propertyPath;
+            System.Type propertyType = targetObject.GetType();
+
+            while (propertyPath.Length > 0)
+            {
+                if (propertyPath.StartsWith("."))
+                    propertyPath = propertyPath.Substring(1);
+
+                string[] splitPath = propertyPath.Split(new char[] { '.' }, 2);
+
+                FieldInfo newField = propertyType.GetField(splitPath[0], BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+
+                if (newField == null)
+                    break;
+
+                propertyType = newField.FieldType;
+                if (propertyType.IsArray)
+                {
+                    propertyType = propertyType.GetElementType();
+                }
+                else if (propertyType.IsGenericType && typeof(List<>).IsAssignableFrom(propertyType))
+                {
+                    propertyType = propertyType.GetGenericArguments()[0];
+                }
+
+                if (splitPath.Length == 1)
+                    break;
+
+                propertyPath = splitPath[1];
+                if (propertyPath.StartsWith("Array.data["))
+                    propertyPath = propertyPath.Split(new char[] { ']' }, 2)[1];
+            }
+
+            if (propertyType.IsSubclassOf(typeof(UnityEventBase)))
+                dummyEvent = System.Activator.CreateInstance(propertyType) as UnityEventBase;
+            else
+                dummyEvent = new UnityEvent();
+        }
+#else
         string eventTypeName = currentProperty.FindPropertyRelative("m_TypeName").stringValue;
         System.Type eventType = EasyEventEditorHandler.FindTypeInAllAssemblies(eventTypeName);
         if (eventType == null)
             dummyEvent = new UnityEvent();
         else
             dummyEvent = System.Activator.CreateInstance(eventType) as UnityEventBase;
+#endif
 
         cachedSettings = EasyEventEditorHandler.GetEditorSettings();
+    }
+
+    private void HandleKeyboardShortcuts()
+    {
+        if (!cachedSettings.useHotkeys)
+            return;
+
+        Event currentEvent = Event.current;
+
+        if (!currentState.reorderableList.HasKeyboardControl())
+            return;
+
+        if (currentEvent.type == EventType.ValidateCommand)
+        {
+            if (currentEvent.commandName == "Copy" ||
+                currentEvent.commandName == "Paste" ||
+                currentEvent.commandName == "Cut" ||
+                currentEvent.commandName == "Duplicate" ||
+                currentEvent.commandName == "Delete" ||
+                currentEvent.commandName == "SoftDelete" ||
+                currentEvent.commandName == "SelectAll")
+            {
+                currentEvent.Use();
+            }
+        }
+        else if (currentEvent.type == EventType.ExecuteCommand) 
+        {
+            if (currentEvent.commandName == "Copy")
+            {
+                HandleCopy();
+                currentEvent.Use();
+            }
+            else if (currentEvent.commandName == "Paste")
+            {
+                HandlePaste();
+                currentEvent.Use();
+            }
+            else if (currentEvent.commandName == "Cut")
+            {
+                HandleCut();
+                currentEvent.Use();
+            }
+            else if (currentEvent.commandName == "Duplicate")
+            {
+                HandleDuplicate();
+                currentEvent.Use();
+            }
+            else if (currentEvent.commandName == "Delete" || currentEvent.commandName == "SoftDelete")
+            {
+                RemoveCallback(currentState.reorderableList);
+                currentEvent.Use();
+            }
+            else if (currentEvent.commandName == "SelectAll") // Use Ctrl+A for add, since Ctrl+N isn't usable using command names
+            {
+                HandleAdd();
+                currentEvent.Use();
+            }
+        }
+    }
+
+    private class EventClipboardStorage
+    {
+        public static SerializedObject CopiedEventProperty;
+        public static int CopiedEventIndex;
+    }
+
+    private void HandleCopy()
+    {
+        SerializedObject serializedEvent = new SerializedObject(listenerArray.GetArrayElementAtIndex(currentState.reorderableList.index).serializedObject.targetObject);
+
+        EventClipboardStorage.CopiedEventProperty = serializedEvent;
+        EventClipboardStorage.CopiedEventIndex = currentState.reorderableList.index;
+    }
+
+    private void HandlePaste()
+    {
+        if (EventClipboardStorage.CopiedEventProperty == null)
+            return;
+
+        SerializedProperty iterator = EventClipboardStorage.CopiedEventProperty.GetIterator();
+
+        if (iterator == null)
+            return;
+
+        while (iterator.NextVisible(true))
+        {
+            if (iterator != null && iterator.name == "m_PersistentCalls")
+            {
+                iterator = iterator.FindPropertyRelative("m_Calls");
+                break;
+            }
+        }
+
+        if (iterator.arraySize < (EventClipboardStorage.CopiedEventIndex + 1))
+            return;
+
+        SerializedProperty sourceProperty = iterator.GetArrayElementAtIndex(EventClipboardStorage.CopiedEventIndex);
+
+        if (sourceProperty == null)
+            return;
+
+        int targetArrayIdx = currentState.reorderableList.count > 0 ? currentState.reorderableList.index : 0;
+        currentState.reorderableList.serializedProperty.InsertArrayElementAtIndex(targetArrayIdx);
+
+        SerializedProperty targetProperty = currentState.reorderableList.serializedProperty.GetArrayElementAtIndex((currentState.reorderableList.count > 0 ? currentState.reorderableList.index : 0) + 1);
+        ResetEventState(targetProperty);
+
+        targetProperty.FindPropertyRelative("m_CallState").enumValueIndex = sourceProperty.FindPropertyRelative("m_CallState").enumValueIndex;
+        targetProperty.FindPropertyRelative("m_Target").objectReferenceValue = sourceProperty.FindPropertyRelative("m_Target").objectReferenceValue;
+        targetProperty.FindPropertyRelative("m_MethodName").stringValue = sourceProperty.FindPropertyRelative("m_MethodName").stringValue;
+        targetProperty.FindPropertyRelative("m_Mode").enumValueIndex = sourceProperty.FindPropertyRelative("m_Mode").enumValueIndex;
+
+        SerializedProperty targetArgs = targetProperty.FindPropertyRelative("m_Arguments");
+        SerializedProperty sourceArgs = sourceProperty.FindPropertyRelative("m_Arguments");
+
+        targetArgs.FindPropertyRelative("m_IntArgument").intValue = sourceArgs.FindPropertyRelative("m_IntArgument").intValue;
+        targetArgs.FindPropertyRelative("m_FloatArgument").floatValue = sourceArgs.FindPropertyRelative("m_FloatArgument").floatValue;
+        targetArgs.FindPropertyRelative("m_BoolArgument").boolValue = sourceArgs.FindPropertyRelative("m_BoolArgument").boolValue;
+        targetArgs.FindPropertyRelative("m_StringArgument").stringValue = sourceArgs.FindPropertyRelative("m_StringArgument").stringValue;
+        targetArgs.FindPropertyRelative("m_ObjectArgument").objectReferenceValue = sourceArgs.FindPropertyRelative("m_ObjectArgument").objectReferenceValue;
+        targetArgs.FindPropertyRelative("m_ObjectArgumentAssemblyTypeName").stringValue = sourceArgs.FindPropertyRelative("m_ObjectArgumentAssemblyTypeName").stringValue;
+
+        currentState.reorderableList.index++;
+        currentState.lastSelectedIndex++;
+
+        targetProperty.serializedObject.ApplyModifiedProperties();
+    }
+
+    private void HandleCut()
+    {
+        HandleCopy();
+        RemoveCallback(currentState.reorderableList);
+    }
+
+    private void HandleDuplicate()
+    {
+        if (currentState.reorderableList.count == 0)
+            return;
+
+        SerializedProperty listProperty = currentState.reorderableList.serializedProperty;
+
+        SerializedProperty eventProperty = listProperty.GetArrayElementAtIndex(currentState.reorderableList.index);
+
+        eventProperty.DuplicateCommand();
+
+        currentState.reorderableList.index++;
+        currentState.lastSelectedIndex++;
+    }
+
+    private void HandleAdd()
+    {
+        int targetIdx = currentState.reorderableList.count > 0 ? currentState.reorderableList.index : 0;
+        currentState.reorderableList.serializedProperty.InsertArrayElementAtIndex(targetIdx);
+
+        SerializedProperty eventProperty = currentState.reorderableList.serializedProperty.GetArrayElementAtIndex(currentState.reorderableList.index + 1);
+        ResetEventState(eventProperty);
+
+        currentState.reorderableList.index++;
+        currentState.lastSelectedIndex++;
     }
 
     public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
     {
         currentLabelText = label.text;
         PrepareState(property);
+
+        HandleKeyboardShortcuts();
 
         if (dummyEvent == null)
             return;
@@ -844,7 +1101,7 @@ public class EasyEventEditorDrawer : PropertyDrawer
             bool isValidParamMatch = true;
             for (int i = 0; i < methodParams.Length; i++)
             {
-                if (!methodParams[i].ParameterType.IsAssignableFrom(argTypes[i]))
+                if (!methodParams[i].ParameterType.IsAssignableFrom(argTypes[i])/* && (argTypes[i] != typeof(int) || !methodParams[i].ParameterType.IsEnum)*/)
                 {
                     isValidParamMatch = false;
                 }
@@ -1119,10 +1376,73 @@ public class EasyEventEditorDrawer : PropertyDrawer
 
         EditorGUI.BeginChangeCheck();
 
+        Object oldTargetObject = serializedTarget.objectReferenceValue;
+
         GUI.Box(gameObjectRect, GUIContent.none);
         EditorGUI.PropertyField(gameObjectRect, serializedTarget, GUIContent.none);
         if (EditorGUI.EndChangeCheck())
-            serializedMethod.stringValue = null;
+        {
+            Object newTargetObject = serializedTarget.objectReferenceValue;
+
+            // Attempt to maintain the function pointer and component pointer if someone changes the target object and it has the correct component type on it.
+            if (oldTargetObject != null && newTargetObject != null)
+            {
+                if (oldTargetObject.GetType() != newTargetObject.GetType()) // If not an asset, if it is an asset and the same type we don't do anything
+                {
+                    // If these are Unity components then the game object that they are attached to may have multiple copies of the same component type so attempt to match the count
+                    if (typeof(Component).IsAssignableFrom(oldTargetObject.GetType()) && newTargetObject.GetType() == typeof(GameObject))
+                    {
+                        GameObject oldParentObject = ((Component)oldTargetObject).gameObject;
+                        GameObject newParentObject = (GameObject)newTargetObject;
+
+                        Component[] oldComponentList = oldParentObject.GetComponents(oldTargetObject.GetType());
+
+                        int componentLocationOffset = 0;
+                        for (int i = 0; i < oldComponentList.Length; ++i)
+                        {
+                            if (oldComponentList[i] == oldTargetObject)
+                                break;
+
+                            if (oldComponentList[i].GetType() == oldTargetObject.GetType()) // Only take exact matches for component type since I don't want to do redo the reflection to find the methods at the moment.
+                                componentLocationOffset++;
+                        }
+
+                        Component[] newComponentList = newParentObject.GetComponents(oldTargetObject.GetType());
+
+                        int newComponentIndex = 0;
+                        int componentCount = -1;
+                        for (int i = 0; i < newComponentList.Length; ++i)
+                        {
+                            if (componentCount == componentLocationOffset)
+                                break;
+
+                            if (newComponentList[i].GetType() == oldTargetObject.GetType())
+                            {
+                                newComponentIndex = i;
+                                componentCount++;
+                            }
+                        }
+                        
+                        if (newComponentList.Length > 0 && newComponentList[newComponentIndex].GetType() == oldTargetObject.GetType())
+                        {
+                            serializedTarget.objectReferenceValue = newComponentList[newComponentIndex];
+                        }
+                        else
+                        {
+                            serializedMethod.stringValue = null;
+                        }
+                    }
+                    else
+                    {
+                        serializedMethod.stringValue = null;
+                    }
+                }
+            }
+            else
+            {
+                serializedMethod.stringValue = null;
+            }
+        }
 
         PersistentListenerMode mode = (PersistentListenerMode)serializedMode.enumValueIndex;
 
@@ -1225,6 +1545,11 @@ public class EasyEventEditorDrawer : PropertyDrawer
 
         // Init default state
         SerializedProperty serialiedListener = listenerArray.GetArrayElementAtIndex(list.index);
+        ResetEventState(serialiedListener);
+    }
+
+    void ResetEventState(SerializedProperty serialiedListener)
+    {
         SerializedProperty serializedCallState = serialiedListener.FindPropertyRelative("m_CallState");
         SerializedProperty serializedTarget = serialiedListener.FindPropertyRelative("m_Target");
         SerializedProperty serializedMethodName = serialiedListener.FindPropertyRelative("m_MethodName");
@@ -1238,6 +1563,7 @@ public class EasyEventEditorDrawer : PropertyDrawer
 
         serializedArgs.FindPropertyRelative("m_IntArgument").intValue = 0;
         serializedArgs.FindPropertyRelative("m_FloatArgument").floatValue = 0f;
+        serializedArgs.FindPropertyRelative("m_BoolArgument").boolValue = false;
         serializedArgs.FindPropertyRelative("m_StringArgument").stringValue = null;
         serializedArgs.FindPropertyRelative("m_ObjectArgument").objectReferenceValue = null;
         serializedArgs.FindPropertyRelative("m_ObjectArgumentAssemblyTypeName").stringValue = null;
@@ -1245,8 +1571,11 @@ public class EasyEventEditorDrawer : PropertyDrawer
 
     void RemoveCallback(ReorderableList list)
     {
-        ReorderableList.defaultBehaviours.DoRemoveButton(list);
-        currentState.lastSelectedIndex = list.index;
+        if (currentState.reorderableList.count > 0)
+        {
+            ReorderableList.defaultBehaviours.DoRemoveButton(list);
+            currentState.lastSelectedIndex = list.index;
+        }
     }
 }
 
