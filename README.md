@@ -8,6 +8,7 @@ Drop in replacement for the default Unity event editor drawer that allows listen
 * Gives easy access to private, internal, and obsolete methods/properties that Unity usually hides
 * Allows editing of multiple of the same component type on the same object
 * Provides an Invoke button on each event which executes the methods in the list (make sure you are in play mode if they are runtime only!)
+* Adds hotkeys for editing events; hotkeys added are Add (Ctrl+A), Copy, Cut, Paste, Delete, and Duplicate
 
 ## Installation
 1. Grab the EasyEventEditor.cs script by [downloading the zip](https://github.com/Merlin-san/EasyEventEditor/archive/master.zip) and put it somewhere in your project files or download [the most recent release](https://github.com/Merlin-san/EasyEventEditor/releases/latest) and open the .unitypackage in Unity.
