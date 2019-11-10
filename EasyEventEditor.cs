@@ -816,7 +816,7 @@ public class EasyEventEditorDrawer : PropertyDrawer
         MethodInfo invokeMethod = InvokeFindMethod("Invoke", dummyEvent, dummyEvent, PersistentListenerMode.EventDefined);
         FieldInfo serializedField = currentProperty.serializedObject.targetObject.GetType().GetField(currentProperty.name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
-        object[] invokeTargets = currentProperty.serializedObject.targetObjects.Select(target => target == null ? null : serializedField.GetValue(target)).Where(f => f != null).ToArray();
+        object[] invokeTargets = currentProperty.serializedObject.targetObjects.Select(target => target == null || serializedField == null ? null : serializedField.GetValue(target)).Where(f => f != null).ToArray();
         
         EditorGUI.BeginDisabledGroup(invokeTargets.Length == 0 || invokeMethod == null);
 
