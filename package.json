@@ -1,7 +1,7 @@
 {
   "name": "com.merlin.easyeventeditor",
   "displayName": "Easy Event Editor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "unity": "2017.4",
   "description": "Drop in replacement for the default Unity event editor drawer that allows listener reordering and a few other things",
   "keywords": ["Event", "Editor", "Delegate"],
