@@ -13,7 +13,7 @@ Drop in replacement for the default Unity event editor drawer that allows listen
 ## Installation
 1. Grab the EasyEventEditor.cs script by [downloading the zip](https://github.com/Merlin-san/EasyEventEditor/archive/master.zip) and put it somewhere in your project files or download [the most recent release](https://github.com/Merlin-san/EasyEventEditor/releases/latest) and open the .unitypackage in Unity. 
 
-      If you want to install from the package manager, [download a zip](https://github.com/Merlin-san/EasyEventEditor/archive/master.zip) or clone the project and extract it to some directory outside of your project or into the packages directory of your project. Then open the package manager and click the '+' button on the bottom left of the window, click "Add package from disk..." and navigate to the `package.json` file in the directory you extracted the zip to. 
+      If you want to install from the package manager, [download a zip](https://github.com/Merlin-san/EasyEventEditor/archive/master.zip) or clone the project and extract it to some directory outside of your project or into the `Packages` directory of your project. Then open the package manager and click the '+' button on the bottom left of the window, click "Add package from disk..." and navigate to the `package.json` file in the directory you extracted the zip to. 
       
 2. You will now have everything enabled. To disable features that you don't want you will need to open the EEE settings menu.
 3. Open the settings menu under Edit->Easy Event Editor Settings, or in 2018.3 and up open your editor Preferences and find the Easy Event Editor section. These settings will persist between projects, though you'll need to re-import the event editor script.
