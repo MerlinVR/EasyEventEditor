@@ -1,4 +1,4 @@
-﻿/**
+/**
  * MIT License
  * 
  * Copyright (c) 2019 Merlin
@@ -913,10 +913,15 @@ public class EasyEventEditorDrawer : PropertyDrawer
         if (findMethod == null)
         {
             // Rather not reinvent the wheel considering this function calls different functions depending on the number of args the event has...
+            // Unity 2020.1 changed the function signature for the FindMethod method (the second parameter is a Type instead of an object)
             findMethod = eventObject.GetType().GetMethod("FindMethod", BindingFlags.NonPublic | BindingFlags.Instance, null,
                     new System.Type[] {
                     typeof(string),
+#if UNITY_2020_1_OR_NEWER
+                    typeof(System.Type),
+#else
                     typeof(object),
+#endif
                     typeof(PersistentListenerMode),
                     typeof(System.Type)
                     },
@@ -931,7 +936,11 @@ public class EasyEventEditorDrawer : PropertyDrawer
             return null;
         }
 
-        return findMethod.Invoke(eventObject, new object[] { functionName, targetObject, listenerMode, argType }) as MethodInfo;
+#if UNITY_2020_1_OR_NEWER
+        return findMethod.Invoke(eventObject, new object[] {functionName, targetObject?.GetType(), listenerMode, argType }) as MethodInfo;
+#else
+        return findMethod.Invoke(eventObject, new object[] {functionName, targetObject, listenerMode, argType }) as MethodInfo;
+#endif
     }
 
     System.Type[] GetEventParams(UnityEventBase eventIn)
