@@ -58,6 +58,7 @@ public class EasyEventEditorHandler
     private const string eeeDisplayArgumentTypeKey = "EEE.displayArgumentType";
     private const string eeeGroupSameComponentTypeKey = "EEE.groupSameComponentType";
     private const string eeeUseHotkeys = "EEE.usehotkeys";
+    private const string eeeSeparateMonoBehaviourMethods = "EEE.separateMonoBehaviourMetods";
 
     private static bool patchApplied = false;
     private static FieldInfo internalDrawerTypeMap = null;
@@ -71,6 +72,7 @@ public class EasyEventEditorHandler
         public bool displayArgumentType;
         public bool groupSameComponentType;
         public bool useHotkeys;
+        public bool separateMonoBehaviourMethods;
     }
 
     // https://stackoverflow.com/questions/12898282/type-gettype-not-working 
@@ -354,6 +356,7 @@ public class EasyEventEditorHandler
             displayArgumentType = EditorPrefs.GetBool(eeeDisplayArgumentTypeKey, true),
             groupSameComponentType = EditorPrefs.GetBool(eeeGroupSameComponentTypeKey, false),
             useHotkeys = EditorPrefs.GetBool(eeeUseHotkeys, true),
+            separateMonoBehaviourMethods = EditorPrefs.GetBool(eeeSeparateMonoBehaviourMethods, true),
         };
 
         return settings;
@@ -367,6 +370,7 @@ public class EasyEventEditorHandler
         EditorPrefs.SetBool(eeeDisplayArgumentTypeKey, settings.displayArgumentType);
         EditorPrefs.SetBool(eeeGroupSameComponentTypeKey, settings.groupSameComponentType);
         EditorPrefs.SetBool(eeeUseHotkeys, settings.useHotkeys);
+        EditorPrefs.SetBool(eeeSeparateMonoBehaviourMethods, settings.separateMonoBehaviourMethods);
     }
 }
 
@@ -378,6 +382,7 @@ internal class SettingsGUIContent
     private static GUIContent displayArgumentTypeContent = new GUIContent("Display argument type on function name", "Shows the argument that a function takes on the function header");
     private static GUIContent groupSameComponentTypeContent = new GUIContent("Do not group components of the same type", "If you have multiple components of the same type on one object, show all components. Unity hides duplicate components by default.");
     private static GUIContent useHotkeys = new GUIContent("Use hotkeys", "Adds common Unity hotkeys to event editor that operate on the currently selected event. The commands are Add (CTRL+A), Copy, Paste, Cut, Delete, and Duplicate");
+    private static GUIContent separateMonoBehaviourMethods = new GUIContent("Separate MonoBehaviour Methods", "Separate MonoBehaviour Methods");
 
     public static void DrawSettingsButtons(EasyEventEditorHandler.EEESettings settings)
     {
@@ -392,6 +397,7 @@ internal class SettingsGUIContent
         settings.displayArgumentType = EditorGUILayout.ToggleLeft(displayArgumentTypeContent, settings.displayArgumentType);
         settings.groupSameComponentType = !EditorGUILayout.ToggleLeft(groupSameComponentTypeContent, !settings.groupSameComponentType);
         settings.useHotkeys = EditorGUILayout.ToggleLeft(useHotkeys, settings.useHotkeys);
+        settings.separateMonoBehaviourMethods = EditorGUILayout.ToggleLeft(separateMonoBehaviourMethods, settings.separateMonoBehaviourMethods);
 
         EditorGUI.EndDisabledGroup();
         EditorGUI.indentLevel -= 1;
@@ -1246,8 +1252,41 @@ public class EasyEventEditorDrawer : PropertyDrawer
             }
         }
 
-        // Add static header if we have dynamic bindings
-        if (dynamicBinding)
+        if (cachedSettings.separateMonoBehaviourMethods)
+        {
+            // Add MonoBehaviour Methods header
+            {
+                menu.AddDisabledItem(new GUIContent(contentPath + "MonoBehaviour Methods"));
+                menu.AddSeparator(contentPath);
+            }
+
+            foreach (FunctionData method in methodInfos)
+            {
+                if (method.targetMethod.Name == "StopCoroutine" ||
+                    method.targetMethod.Name == "Invoke" ||
+                    method.targetMethod.Name == "CancelInvoke" ||
+                    method.targetMethod.Name == "StartCoroutine" ||
+                    method.targetMethod.Name == "StopAllCoroutines" ||
+                    method.targetMethod.Name == "set_useGUILayout" ||
+                    method.targetMethod.Name == "set_runInEditMode" ||
+                    method.targetMethod.Name == "set_enabled" ||
+                    method.targetMethod.Name == "set_name" ||
+                    method.targetMethod.Name == "set_tag" ||
+                    method.targetMethod.Name == "BroadcastMessage" ||
+                    method.targetMethod.Name == "Finalize" ||
+                    method.targetMethod.Name == "OnDestroy" ||
+                    method.targetMethod.Name == "Start" ||
+                    method.targetMethod.Name == "SendMessage" ||
+                    method.targetMethod.Name == "SendMessageUpwards" ||
+                    method.targetMethod.Name == "EnsureRunningOnMainThread")
+                {
+                    AddFunctionToMenu(contentPath, elementProperty, method, menu, componentCount);
+                }
+            }
+        }
+
+        // Add static header
+        if (dynamicBinding || cachedSettings.separateMonoBehaviourMethods)
         {
             menu.AddDisabledItem(new GUIContent(contentPath + "Static Parameters"));
             menu.AddSeparator(contentPath);
@@ -1257,7 +1296,7 @@ public class EasyEventEditorDrawer : PropertyDrawer
         {
             AddFunctionToMenu(contentPath, elementProperty, method, menu, componentCount);
         }
-    }
+        }
 
     class ComponentTypeCount
     {
