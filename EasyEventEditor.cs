@@ -677,6 +677,7 @@ public class EasyEventEditorDrawer : PropertyDrawer
     {
         public static SerializedObject CopiedEventProperty;
         public static int CopiedEventIndex;
+        public static string CopiedPropertyPath;
     }
 
     private void HandleCopy()
@@ -685,6 +686,7 @@ public class EasyEventEditorDrawer : PropertyDrawer
 
         EventClipboardStorage.CopiedEventProperty = serializedEvent;
         EventClipboardStorage.CopiedEventIndex = currentState.reorderableList.index;
+        EventClipboardStorage.CopiedPropertyPath = listenerArray.propertyPath;
     }
 
     private void HandlePaste()
@@ -702,7 +704,8 @@ public class EasyEventEditorDrawer : PropertyDrawer
             if (iterator != null && iterator.name == "m_PersistentCalls")
             {
                 iterator = iterator.FindPropertyRelative("m_Calls");
-                break;
+                if (iterator.propertyPath == EventClipboardStorage.CopiedPropertyPath)
+                    break;
             }
         }
 
